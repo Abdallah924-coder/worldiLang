@@ -1,0 +1,16 @@
+{
+  "name": "worldifyai-language-trainer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WorldifyAI language trainer with MongoDB and Brevo",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.8.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
