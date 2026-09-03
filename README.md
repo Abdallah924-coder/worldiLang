@@ -20,7 +20,7 @@ npm install
 npm start
 ```
 
-Les écrans d’authentification sont séparés : `/login.html`, `/register.html`, `/forgot-password.html` et `/reset-password.html`. L’application est accessible à la racine uniquement après connexion.
+Les écrans d’authentification sont séparés : `/login`, `/register`, `/forgot-password` et `/reset-password`. L’application est accessible à la racine uniquement après connexion.
 
 Sur Render : Build Command `npm install`, Start Command `npm start`, puis ajouter les variables du fichier `.env.example`. Dans MongoDB Atlas, autoriser les connexions réseau du service Render.
 
