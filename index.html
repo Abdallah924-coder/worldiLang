@@ -245,7 +245,7 @@
         clearBtn.addEventListener("click", clearForm);
         clearHistoryBtn.addEventListener("click", clearHistory);
         copyBtn.addEventListener("click", copyLatestTranslation);
-        speakResultBtn.addEventListener("click", () => speak(latestEntry && latestEntry.translation, targetLanguageSelect.value));
+        speakResultBtn.addEventListener("click", () => speak(latestEntry && latestEntry.translation, targetLanguageSelect.value, speakResultBtn));
         favoriteResultBtn.addEventListener("click", () => { if (latestEntry) toggleFavorite(latestEntry.id); });
         $("newQuizBtn").addEventListener("click", newQuiz);
         logoutBtn.addEventListener("click", logout);
@@ -328,7 +328,7 @@
                 const translation = document.createElement("div"); translation.className = "history-translation"; translation.textContent = `${entry.translation} (${entry.language})`;
                 const meta = document.createElement("div"); meta.className = "card-meta"; meta.textContent = entry.timestamp;
                 const actions = document.createElement("div"); actions.className = "history-actions";
-                const listen = document.createElement("button"); listen.className = "small-btn"; listen.type = "button"; listen.textContent = "🔊"; listen.title = "Écouter"; listen.setAttribute("aria-label", "Écouter"); listen.addEventListener("click", () => speak(entry.translation, entry.targetLang));
+                const listen = document.createElement("button"); listen.className = "small-btn"; listen.type = "button"; listen.textContent = "🔊"; listen.title = "Écouter"; listen.setAttribute("aria-label", "Écouter"); listen.addEventListener("click", () => speak(entry.translation, entry.targetLang, listen));
                 const favorite = document.createElement("button"); favorite.className = "small-btn"; favorite.type = "button"; favorite.textContent = entry.favorite ? "★" : "☆"; favorite.title = entry.favorite ? "Retirer des favoris" : "Ajouter aux favoris"; favorite.setAttribute("aria-label", favorite.title); favorite.setAttribute("aria-pressed", String(Boolean(entry.favorite))); favorite.addEventListener("click", () => toggleFavorite(entry.id));
                 const remove = document.createElement("button"); remove.className = "small-btn delete-btn"; remove.type = "button"; remove.textContent = "×"; remove.title = "Supprimer"; remove.setAttribute("aria-label", "Supprimer"); remove.addEventListener("click", () => deleteHistoryEntry(entry.id));
                 top.append(word); content.append(top, translation, meta); actions.append(listen, favorite, remove); item.append(content, actions); list.append(item);
@@ -340,7 +340,32 @@
         function updateFavoriteButton() { const active = Boolean(latestEntry?.favorite); favoriteResultBtn.textContent = active ? "★" : "☆"; favoriteResultBtn.setAttribute("aria-pressed", String(active)); favoriteResultBtn.title = active ? "Retirer des favoris" : "Ajouter aux favoris"; favoriteResultBtn.setAttribute("aria-label", favoriteResultBtn.title); }
         function clearForm() { sourceWordInput.value = ""; latestEntry = null; resultBox.classList.remove("active"); clearStatus(); sourceWordInput.focus(); }
         async function copyLatestTranslation() { if (!latestEntry) return; try { await navigator.clipboard.writeText(latestEntry.translation); showStatus(courses[currentCourse].copied, "success"); } catch { showStatus(courses[currentCourse].copyError, "error"); } }
-        function speak(text, lang) { if (!text) return; if (!("speechSynthesis" in window)) { showStatus("La lecture audio n'est pas disponible sur cet appareil.", "error"); return; } window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.lang = lang || courses[currentCourse].voice; window.speechSynthesis.speak(utterance); }
+        let speechVoices = [];
+        function refreshSpeechVoices() { if ("speechSynthesis" in window) speechVoices = window.speechSynthesis.getVoices(); }
+        if ("speechSynthesis" in window) { refreshSpeechVoices(); window.speechSynthesis.addEventListener("voiceschanged", refreshSpeechVoices); }
+        function speak(text, lang, button) {
+            if (!text) return;
+            if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) { showStatus("La lecture audio n'est pas disponible sur cet appareil.", "error"); return; }
+            const synthesis = window.speechSynthesis;
+            const requestedLang = lang || courses[currentCourse].voice;
+            const locale = requestedLang.length === 2 ? ({ en: "en-US", it: "it-IT", fr: "fr-FR" }[requestedLang] || requestedLang) : requestedLang;
+            const voice = speechVoices.find((item) => item.lang.toLowerCase() === locale.toLowerCase()) || speechVoices.find((item) => item.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()));
+            const utterance = new SpeechSynthesisUtterance(String(text));
+            utterance.lang = locale;
+            if (voice) utterance.voice = voice;
+            if (button) button.disabled = true;
+            utterance.onend = () => { if (button) button.disabled = false; };
+            utterance.onerror = () => { if (button) button.disabled = false; showStatus("La lecture audio a échoué. Vérifiez le volume et la langue de votre appareil.", "error"); };
+            try {
+                if (synthesis.speaking || synthesis.pending) synthesis.cancel();
+                synthesis.resume();
+                synthesis.speak(utterance);
+            } catch (error) {
+                if (button) button.disabled = false;
+                showStatus("La lecture audio n'est pas disponible sur cet appareil.", "error");
+                console.error("Speech synthesis error:", error);
+            }
+        }
         function setBusy(isBusy) { translateBtn.disabled = isBusy; translateBtn.textContent = isBusy ? courses[currentCourse].loading : courses[currentCourse].translateLabel; }
         function showStatus(message, type) { statusMessage.textContent = message; statusMessage.className = `status ${type || ""}`.trim(); }
         function clearStatus() { statusMessage.textContent = ""; statusMessage.className = "status"; }
