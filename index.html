@@ -422,7 +422,21 @@
             if (level === "B2" && turn >= 3) return response + (currentCourse === "fr" ? " Utilise au moins un connecteur logique et justifie ta réponse." : currentCourse === "en" ? " Use at least one linking word and justify your answer." : " Usa almeno un connettivo logico e giustifica la tua risposta.");
             return response;
         }
-        function startSpeechRecognition() { const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!Recognition) { conversationStatus.textContent = conversationConfig().micUnavailable; return; } if (speechRecognition) speechRecognition.abort(); speechRecognition = new Recognition(); speechRecognition.lang = courses[currentCourse].voice; speechRecognition.interimResults = false; speechRecognition.maxAlternatives = 1; conversationMicBtn.disabled = true; conversationStatus.textContent = conversationConfig().listening; speechRecognition.onresult = (event) => { conversationInput.value = event.results[0][0].transcript; submitConversation(); }; speechRecognition.onerror = () => { conversationMicBtn.disabled = false; conversationStatus.textContent = conversationConfig().micUnavailable; }; speechRecognition.onend = () => { conversationMicBtn.disabled = false; if (conversationStatus.textContent === conversationConfig().listening) conversationStatus.textContent = ""; }; speechRecognition.start(); }
+        function startSpeechRecognition() {
+            const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!Recognition) { conversationStatus.textContent = conversationConfig().micUnavailable; return; }
+            if (speechRecognition) speechRecognition.abort();
+            speechRecognition = new Recognition();
+            speechRecognition.lang = courses[currentCourse].voice;
+            speechRecognition.interimResults = false;
+            speechRecognition.maxAlternatives = 1;
+            conversationMicBtn.disabled = true;
+            conversationStatus.textContent = conversationConfig().listening;
+            speechRecognition.onresult = (event) => { conversationInput.value = event.results[0][0].transcript; submitConversation(); };
+            speechRecognition.onerror = () => { conversationMicBtn.disabled = false; conversationStatus.textContent = conversationConfig().micUnavailable; };
+            speechRecognition.onend = () => { conversationMicBtn.disabled = false; if (conversationStatus.textContent === conversationConfig().listening) conversationStatus.textContent = ""; };
+            try { speechRecognition.start(); } catch (error) { conversationMicBtn.disabled = false; conversationStatus.textContent = conversationConfig().micUnavailable; console.error("Speech recognition error:", error); }
+        }
 
         function setView(viewKey) {
             currentView = ["translate", "review", "quiz", "conversation"].includes(viewKey) ? viewKey : "translate";
@@ -479,7 +493,11 @@
         async function copyLatestTranslation() { if (!latestEntry) return; try { await navigator.clipboard.writeText(latestEntry.translation); showStatus(courses[currentCourse].copied, "success"); } catch { showStatus(courses[currentCourse].copyError, "error"); } }
         let speechVoices = [];
         function refreshSpeechVoices() { if ("speechSynthesis" in window) speechVoices = window.speechSynthesis.getVoices(); }
-        if ("speechSynthesis" in window) { refreshSpeechVoices(); window.speechSynthesis.addEventListener("voiceschanged", refreshSpeechVoices); }
+        if ("speechSynthesis" in window) {
+            refreshSpeechVoices();
+            if (typeof window.speechSynthesis.addEventListener === "function") window.speechSynthesis.addEventListener("voiceschanged", refreshSpeechVoices);
+            else window.speechSynthesis.onvoiceschanged = refreshSpeechVoices;
+        }
         function speak(text, lang, button) {
             if (!text) return;
             if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) { showStatus("La lecture audio n'est pas disponible sur cet appareil.", "error"); return; }
