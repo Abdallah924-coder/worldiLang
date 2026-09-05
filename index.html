@@ -467,7 +467,7 @@
             } catch (error) { console.error("Translation error:", error); showStatus(course.networkError, "error"); }
             finally { setBusy(false); }
         }
-        function renderResult() { resultWord.textContent = latestEntry.word; resultTranslation.textContent = latestEntry.translation; resultMeta.textContent = `${courses[currentCourse].resultMeta} ${latestEntry.language} - ${latestEntry.timestamp}`; resultBox.classList.add("active"); updateFavoriteButton(); }
+        function renderResult() { resultWord.textContent = latestEntry.word; resultTranslation.textContent = latestEntry.translation; resultMeta.textContent = `${courses[currentCourse].resultMeta} ${latestEntry.language} - ${latestEntry.timestamp}`; speakResultBtn.disabled = false; resultBox.classList.add("active"); updateFavoriteButton(); }
         function getHistory() { return Array.isArray(remoteData.histories[currentCourse]) ? remoteData.histories[currentCourse] : []; }
         function saveHistory(entry) { remoteData.histories[currentCourse] = [entry, ...getHistory()].slice(0, 50); updateReview(); updateProgress(); scheduleSync(); }
         function updateReview() {
@@ -498,13 +498,13 @@
         async function copyLatestTranslation() { if (!latestEntry) return; try { await navigator.clipboard.writeText(latestEntry.translation); showStatus(courses[currentCourse].copied, "success"); } catch { showStatus(courses[currentCourse].copyError, "error"); } }
         let activeUtterance = null;
         let activeAudio = null;
+        let speechWatchdog = null;
         function playAudioFallback(text, lang, button) {
             const locale = lang && lang.length === 2 ? ({ en: "en", it: "it", fr: "fr" }[lang] || lang) : (lang || "fr").slice(0, 2);
             const audio = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(locale)}&q=${encodeURIComponent(String(text))}`);
             activeAudio = audio;
-            if (button) button.disabled = true;
-            audio.onended = () => { if (button) button.disabled = false; if (activeAudio === audio) activeAudio = null; };
-            audio.onerror = () => { if (button) button.disabled = false; if (activeAudio === audio) activeAudio = null; showStatus("La lecture audio a échoué. Vérifiez le volume et la connexion.", "error"); };
+            audio.onended = () => { if (activeAudio === audio) activeAudio = null; };
+            audio.onerror = () => { if (activeAudio === audio) activeAudio = null; showStatus("La lecture audio a échoué. Vérifiez le volume et la connexion.", "error"); };
             audio.play().catch(() => { if (button) button.disabled = false; showStatus("La lecture audio est bloquée par le navigateur.", "error"); });
         }
         function speak(text, lang, button) {
@@ -517,16 +517,16 @@
             utterance.rate = 1;
             utterance.pitch = 1;
             activeUtterance = utterance;
-            if (button) button.disabled = true;
-            utterance.onend = () => { if (button) button.disabled = false; if (activeUtterance === utterance) activeUtterance = null; };
-            utterance.onerror = (event) => { if (button) button.disabled = false; if (activeUtterance === utterance) activeUtterance = null; if (event.error !== "canceled") playAudioFallback(text, locale, button); };
+            utterance.onstart = () => { if (speechWatchdog) { window.clearTimeout(speechWatchdog); speechWatchdog = null; } };
+            utterance.onend = () => { if (speechWatchdog) { window.clearTimeout(speechWatchdog); speechWatchdog = null; } if (activeUtterance === utterance) activeUtterance = null; };
+            utterance.onerror = (event) => { if (speechWatchdog) { window.clearTimeout(speechWatchdog); speechWatchdog = null; } if (activeUtterance === utterance) activeUtterance = null; if (event.error !== "canceled") playAudioFallback(text, locale, button); };
             try {
                 if (activeAudio) { activeAudio.pause(); activeAudio = null; }
                 if (synthesis.speaking || synthesis.pending) synthesis.cancel();
                 synthesis.resume();
                 synthesis.speak(utterance);
+                speechWatchdog = window.setTimeout(() => { if (activeUtterance !== utterance || synthesis.speaking) return; activeUtterance = null; playAudioFallback(text, locale, button); }, 700);
             } catch (error) {
-                if (button) button.disabled = false;
                 playAudioFallback(text, locale, button);
                 console.error("Speech synthesis error:", error);
             }
