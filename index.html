@@ -256,7 +256,7 @@
         const accountPanel = $("accountPanel"), accountLogged = $("accountLogged"), accountUserName = $("accountUserName"), logoutBtn = $("logoutBtn"), appNavigation = $("appNavigation"), appMain = $("appMain"), adminPanel = $("adminPanel"), adminContainer = $("adminContainer"), refreshAdminBtn = $("refreshAdminBtn");
         let currentCourse = "fr";
         let currentView = "translate";
-        let conversationState = { messages: [], level: "B1", topic: "daily" };
+        let conversationState = { messages: [], level: "B1", topic: "daily", context: {}, usedReplies: [] };
         let speechRecognition = null;
         const remoteData = { histories: { en: [], it: [], fr: [] }, stats: { en: { answered: 0, correct: 0, daily: 0, day: "" }, it: { answered: 0, correct: 0, daily: 0, day: "" }, fr: { answered: 0, correct: 0, daily: 0, day: "" } } };
         let latestEntry = null;
@@ -337,6 +337,8 @@
             const config = conversationConfig();
             conversationState.level = conversationLevel.value || "B1";
             conversationState.topic = conversationTopic.value || "daily";
+            conversationState.context = {};
+            conversationState.usedReplies = [];
             conversationState.messages = [{ role: "assistant", text: conversationPrompts[currentCourse][conversationState.level] }];
             conversationInput.value = "";
             conversationLog.replaceChildren();
@@ -360,20 +362,51 @@
             resetConversation();
         }
         function renderConversation() { conversationState.messages.forEach((item, index) => { if (conversationLog.children[index]) return; const message = document.createElement("div"); message.className = `conversation-message ${item.role}`; message.textContent = item.text; conversationLog.append(message); }); conversationLog.scrollTop = conversationLog.scrollHeight; }
-        function conversationReply(input) {
-            const text = normalizeText(input); const config = conversationConfig(); const level = conversationState.level; const topic = conversationState.topic;
-            const topicName = conversationTopics[currentCourse][topic][0];
-            const positive = currentCourse === "fr" ? "C’est intéressant. Peux-tu donner un exemple concret ?" : currentCourse === "en" ? "That is interesting. Can you give a concrete example?" : "È interessante. Puoi fare un esempio concreto?";
-            const why = currentCourse === "fr" ? "Pourquoi penses-tu cela ? Essaie d’expliquer ton raisonnement." : currentCourse === "en" ? "Why do you think so? Try to explain your reasoning." : "Perché lo pensi? Prova a spiegare il tuo ragionamento.";
-            const correction = currentCourse === "fr" ? "Très bien. Essaie maintenant de reformuler ta réponse avec un connecteur comme « cependant », « parce que » ou « donc »." : currentCourse === "en" ? "Very good. Now reformulate your answer using a connector such as “however”, “because” or “therefore”." : "Molto bene. Ora prova a riformulare la risposta usando un connettivo come « tuttavia », « perché » o « quindi ».";
-            if (text.includes("pourquoi") || text.includes("why") || text.includes("perche")) return why;
-            if (text.includes("exemple") || text.includes("example") || text.includes("esempio")) return correction;
-            if (level === "A1") return currentCourse === "fr" ? `D’accord. Pour continuer sur ${topicName}, dis une phrase simple avec « j’aime », « je n’aime pas » ou « je veux ».` : currentCourse === "en" ? `Okay. To continue with ${topicName}, say a simple sentence with “I like”, “I don’t like” or “I want”.` : `Va bene. Per continuare su ${topicName}, dì una frase semplice con « mi piace », « non mi piace » o « voglio ».`;
-            if (level === "A2") return currentCourse === "fr" ? `Merci pour ta réponse. Que s’est-il passé ensuite dans cette situation de ${topicName.toLowerCase()} ?` : currentCourse === "en" ? `Thank you for your answer. What happened next in this ${topicName.toLowerCase()} situation?` : `Grazie per la risposta. Che cosa è successo dopo in questa situazione di ${topicName.toLowerCase()}?`;
-            if (level === "B2") return currentCourse === "fr" ? `Je comprends ton point de vue. Pour approfondir ${topicName.toLowerCase()}, quelle objection quelqu’un pourrait-il formuler et comment y répondrais-tu ?` : currentCourse === "en" ? `I understand your point of view. To explore ${topicName.toLowerCase()} further, what objection might someone raise and how would you answer it?` : `Capisco il tuo punto di vista. Per approfondire ${topicName.toLowerCase()}, quale obiezione potrebbe fare qualcuno e come risponderesti?`;
-            return positive;
+        function rememberConversation(input) {
+            const raw = input.trim();
+            const patterns = currentCourse === "fr" ? { name: /je m['’]appelle\s+([^,.!?]+)/i, place: /j['’]habite\s+(?:a|à)\s+([^,.!?]+)/i, work: /je travaille\s+(?:comme|dans)\s+([^,.!?]+)/i, preference: /j['’]aime\s+([^,.!?]+)/i } : currentCourse === "en" ? { name: /my name is\s+([^,.!?]+)/i, place: /i live in\s+([^,.!?]+)/i, work: /i work\s+(?:as|in)\s+([^,.!?]+)/i, preference: /i like\s+([^,.!?]+)/i } : { name: /mi chiamo\s+([^,.!?]+)/i, place: /abito\s+(?:a|in)\s+([^,.!?]+)/i, work: /lavoro\s+(?:come|in)\s+([^,.!?]+)/i, preference: /mi piace\s+([^,.!?]+)/i };
+            Object.entries(patterns).forEach(([key, pattern]) => { const match = raw.match(pattern); if (match) conversationState.context[key] = match[1].trim(); });
         }
-        function submitConversation() { const text = conversationInput.value.trim(); if (!text) return; conversationState.messages.push({ role: "user", text }); conversationState.messages.push({ role: "assistant", text: conversationReply(text) }); conversationInput.value = ""; renderConversation(); const reply = conversationState.messages.at(-1).text; speak(reply, courses[currentCourse].voice); }
+        function conversationReply(input) {
+            rememberConversation(input);
+            const turn = conversationState.messages.filter((item) => item.role === "user").length;
+            const level = conversationState.level;
+            const topic = conversationState.topic;
+            const context = conversationState.context;
+            const topicName = conversationTopics[currentCourse][topic][0];
+            const hasContext = Object.values(context)[0];
+            const fact = currentCourse === "fr" ? (context.name ? ` Merci, ${context.name}.` : context.place ? ` ${context.place} semble intéressant.` : "") : currentCourse === "en" ? (context.name ? ` Thank you, ${context.name}.` : context.place ? ` ${context.place} sounds interesting.` : "") : (context.name ? ` Grazie, ${context.name}.` : context.place ? ` ${context.place} sembra interessante.` : "");
+            const banks = {
+                fr: {
+                    daily: ["Qu’est-ce qui rend cette journée particulière pour toi ?", "Compare cette journée avec une journée idéale.", "Quel changement pourrait améliorer cette situation ?", "Résume ton idée et ajoute une conséquence possible."],
+                    travel: ["Quel endroit voudrais-tu visiter et qu’aimerais-tu y découvrir ?", "Quel imprévu pourrait arriver pendant ce voyage ?", "Comment choisirais-tu entre le prix, le confort et l’expérience ?", "Convaincs un ami de faire ce voyage avec toi."],
+                    work: ["Quel est ton rôle dans ce projet et quel est son objectif ?", "Quelle difficulté pourrait ralentir le projet ?", "Quelle solution proposerais-tu, et quels seraient ses risques ?", "Présente ta décision comme lors d’une réunion professionnelle."],
+                    opinion: ["Quelle est ton opinion personnelle sur ce sujet ?", "Peux-tu présenter un argument contraire au tien ?", "Quelles conséquences cette idée pourrait-elle avoir à long terme ?", "Formule une conclusion nuancée avec un avantage et une limite."]
+                },
+                en: {
+                    daily: ["What makes this day special for you?", "Compare this day with your ideal day.", "What change could improve this situation?", "Summarize your idea and add one possible consequence."],
+                    travel: ["What place would you like to visit and what would you discover there?", "What unexpected problem could happen during this trip?", "How would you choose between price, comfort and experience?", "Convince a friend to take this trip with you."],
+                    work: ["What is your role in this project and what is its purpose?", "What difficulty could slow the project down?", "What solution would you suggest, and what risks could it have?", "Present your decision as if you were in a professional meeting."],
+                    opinion: ["What is your personal opinion on this subject?", "Can you present an argument against your own view?", "What long-term consequences could this idea have?", "Give a balanced conclusion with one advantage and one limitation."]
+                },
+                it: {
+                    daily: ["Che cosa rende speciale questa giornata per te?", "Confronta questa giornata con la tua giornata ideale.", "Quale cambiamento potrebbe migliorare questa situazione?", "Riassumi la tua idea e aggiungi una possibile conseguenza."],
+                    travel: ["Quale luogo vorresti visitare e che cosa vorresti scoprire?", "Quale imprevisto potrebbe capitare durante questo viaggio?", "Come sceglieresti tra prezzo, comfort ed esperienza?", "Convinci un amico a fare questo viaggio con te."],
+                    work: ["Qual è il tuo ruolo in questo progetto e qual è il suo obiettivo?", "Quale difficoltà potrebbe rallentare il progetto?", "Quale soluzione proporresti e quali rischi comporterebbe?", "Presenta la tua decisione come durante una riunione professionale."],
+                    opinion: ["Qual è la tua opinione personale su questo argomento?", "Puoi presentare un argomento contrario alla tua opinione?", "Quali conseguenze a lungo termine potrebbe avere questa idea?", "Formula una conclusione equilibrata con un vantaggio e un limite."]
+                }
+            };
+            const prompts = banks[currentCourse][topic];
+            let index = Math.min(turn - 1, prompts.length - 1);
+            if (level === "A1") index = Math.min(turn - 1, 1);
+            if (level === "A2") index = Math.min(turn - 1, 2);
+            if (conversationState.usedReplies.includes(prompts[index])) index = (index + 1) % prompts.length;
+            conversationState.usedReplies.push(prompts[index]);
+            const response = prompts[index];
+            if (turn === 1 && hasContext) return fact + response;
+            if (level === "B2" && turn >= 3) return response + (currentCourse === "fr" ? " Utilise au moins un connecteur logique et justifie ta réponse." : currentCourse === "en" ? " Use at least one linking word and justify your answer." : " Usa almeno un connettivo logico e giustifica la tua risposta.");
+            return response;
+        }
         function startSpeechRecognition() { const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition; if (!Recognition) { conversationStatus.textContent = conversationConfig().micUnavailable; return; } if (speechRecognition) speechRecognition.abort(); speechRecognition = new Recognition(); speechRecognition.lang = courses[currentCourse].voice; speechRecognition.interimResults = false; speechRecognition.maxAlternatives = 1; conversationMicBtn.disabled = true; conversationStatus.textContent = conversationConfig().listening; speechRecognition.onresult = (event) => { conversationInput.value = event.results[0][0].transcript; submitConversation(); }; speechRecognition.onerror = () => { conversationMicBtn.disabled = false; conversationStatus.textContent = conversationConfig().micUnavailable; }; speechRecognition.onend = () => { conversationMicBtn.disabled = false; if (conversationStatus.textContent === conversationConfig().listening) conversationStatus.textContent = ""; }; speechRecognition.start(); }
 
         function setView(viewKey) {
