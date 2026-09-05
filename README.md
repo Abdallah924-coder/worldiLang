@@ -27,3 +27,5 @@ Sur Render : Build Command `npm install`, Start Command `npm start`, puis ajoute
 La récupération du mot de passe envoie un lien Brevo valable 15 minutes. Les e-mails envoyés sont : bienvenue, nouvelle connexion, changement de mot de passe et nouvelle inscription à l’administrateur.
 
 Le lien du canal WhatsApp doit être remplacé dans les pages d’authentification et dans `index.html` par l’URL réelle du canal.
+
+La section `/index` propose aussi une conversation guidée gratuite du niveau A1 au niveau B2, avec saisie clavier, dictée vocale native du navigateur et lecture des réponses. Elle ne nécessite aucune API d’IA payante ; les réponses sont générées par le moteur de dialogue intégré.
