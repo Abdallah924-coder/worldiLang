@@ -72,7 +72,7 @@
         .result-meta, .card-meta, .history-meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
         .icon-btn { flex: 0 0 auto; min-width: 42px; min-height: 42px; padding: 0 10px; border: 1px solid var(--border); color: var(--accent); background: #fff; font-size: 18px; }
         .icon-btn[aria-pressed="true"] { color: #b7791f; background: #fff8df; }
-        .panel-header { align-items: center; margin-bottom: 16px; }
+        .panel-header { align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
         .panel-header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
         .history-list, .card-list { display: grid; gap: 10px; }
         .history-item, .flashcard { align-items: center; padding: 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); }
@@ -96,10 +96,13 @@
         .quiz-feedback { min-height: 22px; color: var(--muted); font-size: 14px; }
         .conversation-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
         .conversation-log { display: grid; gap: 10px; max-height: 430px; margin-bottom: 16px; padding: 14px; overflow-y: auto; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); }
-        .conversation-message { max-width: 82%; padding: 11px 13px; border-radius: 7px; line-height: 1.5; overflow-wrap: anywhere; }
+        .conversation-message { display: grid; gap: 4px; max-width: 82%; padding: 11px 13px; border-radius: 7px; line-height: 1.5; overflow-wrap: anywhere; }
+        .conversation-message small { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .72; }
         .conversation-message.user { justify-self: end; color: #fff; background: var(--accent); }
         .conversation-message.assistant { justify-self: start; color: var(--text); background: #fff; border: 1px solid var(--border); }
-        .conversation-composer { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: end; }
+        .conversation-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: end; }
+        .conversation-composer .btn-primary { min-width: 112px; }
+        .conversation-composer .icon-btn { min-width: 48px; }
         .conversation-composer textarea { width: 100%; min-height: 48px; max-height: 130px; padding: 12px 13px; resize: vertical; border: 1px solid var(--border); border-radius: 7px; color: var(--text); font: inherit; font-size: 16px; }
         .conversation-hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
         footer { padding: 25px 0; color: var(--muted); font-size: 12px; text-align: center; }
@@ -127,7 +130,7 @@
             .topbar { align-items: stretch; flex-direction: column; }
             .course-switcher { grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; overflow: hidden; }
             .section-switcher { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; overflow: hidden; }
-            .translator-grid, .controls, .quiz-options, .account-form { grid-template-columns: 1fr; }
+            .translator-grid, .controls, .quiz-options, .account-form, .conversation-options { grid-template-columns: 1fr; }
             .course-tab, .section-tab { width: 100%; padding: 10px 6px; font-size: 13px; }
             .section-switcher { position: sticky; top: 8px; z-index: 5; margin: 0 -2px 16px; }
             .panel { padding: 16px; }
@@ -141,6 +144,9 @@
             .account-actions { display: grid; grid-template-columns: 1fr; gap: 10px; }
             .account-actions strong { margin-right: 0; }
             .account-actions .btn-secondary, .account-actions .whatsapp-btn { width: 100%; justify-content: center; }
+            .conversation-composer { grid-template-columns: minmax(0, 1fr) auto; }
+            .conversation-composer .btn-primary { grid-column: 1 / -1; width: 100%; }
+            .conversation-message { max-width: 94%; }
         }
     </style>
 </head>
@@ -339,7 +345,10 @@
             conversationState.topic = conversationTopic.value || "daily";
             conversationState.context = {};
             conversationState.usedReplies = [];
-            conversationState.messages = [{ role: "assistant", text: conversationPrompts[currentCourse][conversationState.level] }];
+            const openingByLevel = conversationPrompts[currentCourse][conversationState.level];
+            const topicName = conversationTopics[currentCourse][conversationState.topic][0];
+            const opening = conversationState.level === "A1" ? openingByLevel : openingByLevel.replace(/ce sujet|this topic|questo tema/gi, topicName);
+            conversationState.messages = [{ role: "assistant", text: opening }];
             conversationInput.value = "";
             conversationLog.replaceChildren();
             renderConversation();
@@ -352,6 +361,9 @@
             $("conversationLevel").previousElementSibling.textContent = config.level;
             $("conversationTopic").previousElementSibling.textContent = config.topic;
             conversationInput.placeholder = config.placeholder;
+            const levelNames = currentCourse === "fr" ? { A1: "Débutant", A2: "Élémentaire", B1: "Intermédiaire", B2: "Avancé" } : currentCourse === "en" ? { A1: "Beginner", A2: "Elementary", B1: "Intermediate", B2: "Advanced" } : { A1: "Principiante", A2: "Elementare", B1: "Intermedio", B2: "Avanzato" };
+            const selectedLevel = conversationLevel.value || "B1";
+            conversationLevel.replaceChildren(...Object.entries(levelNames).map(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = `${value} - ${label}`; option.selected = value === selectedLevel; return option; }));
             conversationSendBtn.textContent = config.send;
             $("resetConversationBtn").textContent = config.newChat;
             conversationMicBtn.title = config.mic;
@@ -361,7 +373,10 @@
             conversationTopic.replaceChildren(...Object.entries(topics).map(([value, item]) => { const option = document.createElement("option"); option.value = value; option.textContent = item[0]; return option; }));
             resetConversation();
         }
-        function renderConversation() { conversationState.messages.forEach((item, index) => { if (conversationLog.children[index]) return; const message = document.createElement("div"); message.className = `conversation-message ${item.role}`; message.textContent = item.text; conversationLog.append(message); }); conversationLog.scrollTop = conversationLog.scrollHeight; }
+        function renderConversation() {
+            const speaker = currentCourse === "fr" ? { user: "Vous", assistant: "WorldifyAI" } : currentCourse === "en" ? { user: "You", assistant: "WorldifyAI" } : { user: "Tu", assistant: "WorldifyAI" };
+            conversationState.messages.forEach((item, index) => { if (conversationLog.children[index]) return; const message = document.createElement("div"); message.className = `conversation-message ${item.role}`; const name = document.createElement("small"); name.textContent = speaker[item.role]; const body = document.createElement("div"); body.textContent = item.text; message.append(name, body); conversationLog.append(message); }); conversationLog.scrollTop = conversationLog.scrollHeight;
+        }
         function rememberConversation(input) {
             const raw = input.trim();
             const patterns = currentCourse === "fr" ? { name: /je m['’]appelle\s+([^,.!?]+)/i, place: /j['’]habite\s+(?:a|à)\s+([^,.!?]+)/i, work: /je travaille\s+(?:comme|dans)\s+([^,.!?]+)/i, preference: /j['’]aime\s+([^,.!?]+)/i } : currentCourse === "en" ? { name: /my name is\s+([^,.!?]+)/i, place: /i live in\s+([^,.!?]+)/i, work: /i work\s+(?:as|in)\s+([^,.!?]+)/i, preference: /i like\s+([^,.!?]+)/i } : { name: /mi chiamo\s+([^,.!?]+)/i, place: /abito\s+(?:a|in)\s+([^,.!?]+)/i, work: /lavoro\s+(?:come|in)\s+([^,.!?]+)/i, preference: /mi piace\s+([^,.!?]+)/i };
