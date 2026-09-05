@@ -94,7 +94,9 @@
         .quiz-option.correct { border-color: var(--success); color: var(--success); background: #eefaf4; }
         .quiz-option.wrong { border-color: var(--danger); color: var(--danger); background: #fff0f0; }
         .quiz-feedback { min-height: 22px; color: var(--muted); font-size: 14px; }
-        .conversation-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+        .conversation-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+        .conversation-options .field { min-width: 0; }
+        .conversation-options select { min-width: 0; }
         .conversation-log { display: grid; gap: 10px; max-height: 430px; margin-bottom: 16px; padding: 14px; overflow-y: auto; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); }
         .conversation-message { display: grid; gap: 4px; max-width: 82%; padding: 11px 13px; border-radius: 7px; line-height: 1.5; overflow-wrap: anywhere; }
         .conversation-message small { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .72; }
@@ -192,7 +194,7 @@
                         </div>
                         <div class="field">
                             <label id="targetLabel" for="targetLanguage">Traduire vers</label>
-                            <select id="targetLanguage"></select>
+                            <select id="targetLanguage"><option value="en">Anglais</option><option value="it">Italien</option><option value="fr">Français</option></select>
                         </div>
                     </div>
                     <div class="controls">
@@ -323,7 +325,10 @@
             document.querySelectorAll(".section-tab").forEach((tab, index) => { tab.textContent = course.sections[index]; });
             document.querySelectorAll(".course-tab").forEach((tab) => tab.setAttribute("aria-selected", String(tab.dataset.course === currentCourse)));
             targetLanguageSelect.replaceChildren(...Object.entries(course.targets).map(([code, label]) => { const option = document.createElement("option"); option.value = code; option.textContent = label; return option; }));
-            resultBox.classList.remove("active"); latestEntry = null; sourceWordInput.value = ""; clearStatus(); updateFavoriteButton(); updateReview(); updateProgress(); renderQuizEmpty(); setupConversation(); sourceWordInput.focus();
+            if (!targetLanguageSelect.value) targetLanguageSelect.selectedIndex = 0;
+            resultBox.classList.remove("active"); latestEntry = null; sourceWordInput.value = ""; clearStatus(); updateFavoriteButton(); updateReview(); updateProgress(); renderQuizEmpty();
+            try { setupConversation(); } catch (error) { console.error("Conversation initialization error:", error); }
+            sourceWordInput.focus();
         }
         const conversationTopics = {
             fr: { daily: ["Vie quotidienne", "Parle de ta journée"], travel: ["Voyage", "Organise un voyage"], work: ["Travail", "Discute d’un projet professionnel"], opinion: ["Opinion", "Défends ton point de vue"] },
@@ -358,8 +363,8 @@
             const config = conversationConfig();
             $("conversationTitle").textContent = config.title;
             $("conversationSubtitle").textContent = config.subtitle;
-            $("conversationLevel").previousElementSibling.textContent = config.level;
-            $("conversationTopic").previousElementSibling.textContent = config.topic;
+            $("conversationLevel").closest(".field").querySelector("label").textContent = config.level;
+            $("conversationTopic").closest(".field").querySelector("label").textContent = config.topic;
             conversationInput.placeholder = config.placeholder;
             const levelNames = currentCourse === "fr" ? { A1: "Débutant", A2: "Élémentaire", B1: "Intermédiaire", B2: "Avancé" } : currentCourse === "en" ? { A1: "Beginner", A2: "Elementary", B1: "Intermediate", B2: "Advanced" } : { A1: "Principiante", A2: "Elementare", B1: "Intermedio", B2: "Avanzato" };
             const selectedLevel = conversationLevel.value || "B1";
