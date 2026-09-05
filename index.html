@@ -497,10 +497,21 @@
         function clearForm() { sourceWordInput.value = ""; latestEntry = null; resultBox.classList.remove("active"); clearStatus(); sourceWordInput.focus(); }
         async function copyLatestTranslation() { if (!latestEntry) return; try { await navigator.clipboard.writeText(latestEntry.translation); showStatus(courses[currentCourse].copied, "success"); } catch { showStatus(courses[currentCourse].copyError, "error"); } }
         let activeUtterance = null;
+        let activeAudio = null;
+        function playAudioFallback(text, lang, button) {
+            const locale = lang && lang.length === 2 ? ({ en: "en", it: "it", fr: "fr" }[lang] || lang) : (lang || "fr").slice(0, 2);
+            const audio = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(locale)}&q=${encodeURIComponent(String(text))}`);
+            activeAudio = audio;
+            if (button) button.disabled = true;
+            audio.onended = () => { if (button) button.disabled = false; if (activeAudio === audio) activeAudio = null; };
+            audio.onerror = () => { if (button) button.disabled = false; if (activeAudio === audio) activeAudio = null; showStatus("La lecture audio a échoué. Vérifiez le volume et la connexion.", "error"); };
+            audio.play().catch(() => { if (button) button.disabled = false; showStatus("La lecture audio est bloquée par le navigateur.", "error"); });
+        }
         function speak(text, lang, button) {
-            if (!text || !("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) { showStatus("La lecture audio n'est pas disponible sur cet appareil.", "error"); return; }
-            const synthesis = window.speechSynthesis;
+            if (!text) return;
             const locale = lang && lang.length === 2 ? ({ en: "en-US", it: "it-IT", fr: "fr-FR" }[lang] || lang) : (lang || courses[currentCourse].voice);
+            if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) { playAudioFallback(text, locale, button); return; }
+            const synthesis = window.speechSynthesis;
             const utterance = new window.SpeechSynthesisUtterance(String(text));
             utterance.lang = locale;
             utterance.rate = 1;
@@ -508,18 +519,15 @@
             activeUtterance = utterance;
             if (button) button.disabled = true;
             utterance.onend = () => { if (button) button.disabled = false; if (activeUtterance === utterance) activeUtterance = null; };
-            utterance.onerror = (event) => { if (button) button.disabled = false; if (activeUtterance === utterance) activeUtterance = null; if (event.error !== "canceled") showStatus("La lecture audio a échoué. Vérifiez le volume et la langue de votre appareil.", "error"); };
+            utterance.onerror = (event) => { if (button) button.disabled = false; if (activeUtterance === utterance) activeUtterance = null; if (event.error !== "canceled") playAudioFallback(text, locale, button); };
             try {
-                if (synthesis.speaking || synthesis.pending) {
-                    synthesis.cancel();
-                    window.setTimeout(() => { synthesis.resume(); synthesis.speak(utterance); }, 0);
-                } else {
-                    synthesis.resume();
-                    synthesis.speak(utterance);
-                }
+                if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+                if (synthesis.speaking || synthesis.pending) synthesis.cancel();
+                synthesis.resume();
+                synthesis.speak(utterance);
             } catch (error) {
                 if (button) button.disabled = false;
-                showStatus("La lecture audio n'est pas disponible sur cet appareil.", "error");
+                playAudioFallback(text, locale, button);
                 console.error("Speech synthesis error:", error);
             }
         }
